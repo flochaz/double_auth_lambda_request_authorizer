@@ -1,0 +1,165 @@
+doctype html
+html
+  head
+    title Multi auth custom authorizer Cognito or API KEY
+    style.
+      body {
+        width: 650px;
+        margin: auto;
+      }
+      h1 {
+        text-align: center;
+      }
+      .response > code {
+        display: block;
+        background-color: #eff0f1;
+        color: #393318;
+        padding: 5px;
+        font-family: Consolas,Menlo,Monaco,Lucida Console,Liberation Mono,DejaVu Sans Mono,Bitstream Vera Sans Mono,Courier New,monospace,sans-serif;
+        white-space: pre;
+        overflow-x: auto;
+      }
+      form {
+        margin-bottom: 1rem;
+      }
+      .form-group {
+        padding-bottom: 1rem;
+      }
+      label {
+        display: block;
+      }
+  body
+    h1 My Serverless Application
+    p
+      | Public endpoints: GET /, GET /users
+    
+    section.form
+      h2 Invoke API
+      p Experiment with the `users` resource with the form below.
+      form
+        div.form-group
+          label(for='authTypeField') Auth type
+          select(name='authType' id='authTypeField')
+            option(value='WRONG_API_KEY') WRONG_API_KEY
+            option(value='RIGHT_API_KEY') RIGHT_API_KEY
+            option(value='WRONG_COGNITO_TOKEN') WRONG_COGNITO_TOKEN
+            option(value='RIGHT_COGNITO_TOKEN') RIGHT_COGNITO_TOKEN
+        input(type='submit')
+
+    section
+      h2 Response
+      p.request
+        span.request__method GET
+        span &nbsp;
+        spand.request__endpoint /users
+      section.response
+        code
+          
+    script.
+
+      const apiId = '#{apiId}'
+      const apiUrl = '#{apiUrl}/'
+      const cognitoUserPoolClientId = '#{cognitoUserPoolClientId}'
+      
+      const queryStringParams = new URLSearchParams(window.location.search)
+      const cognitoCode = queryStringParams.get('code')
+      let cognitoIdentityToken = localStorage.getItem('cognitoIdentityToken')
+      
+      const form = document.querySelector('form')
+      form.addEventListener('submit', onApiInvokeFormSubmit)
+
+      fetch('users')
+      .then(setResponseText)
+      .catch(setResponseText)
+
+      if (cognitoCode) {
+        exchangeCodeForAccessToken()
+          .then(response => response.json())
+          .then(json => {
+            if (json.id_token) {
+              cognitoIdentityToken = json.id_token
+              localStorage.setItem('cognitoIdentityToken', cognitoIdentityToken)
+            }
+          })
+      }
+
+      function convertJsonToFormUrlEncoded(json) {
+        const oAuthTokenBodyArray = Object.entries(json).map(([key, value]) => {
+          const encodedKey = encodeURIComponent(key)
+          const encodedValue = encodeURIComponent(value)
+
+          return `${encodedKey}=${encodedValue}`
+        })
+
+        return oAuthTokenBodyArray.join('&')
+      }
+
+      function exchangeCodeForAccessToken() {
+        const oauthTokenBodyJson = {
+          grant_type: 'authorization_code',
+          client_id: cognitoUserPoolClientId,
+          code: cognitoCode,
+          redirect_uri: apiUrl
+        }
+        const oauthTokenBody = convertJsonToFormUrlEncoded(oauthTokenBodyJson)
+        
+        return fetch(`https://${apiId}.auth.eu-west-1.amazoncognito.com/oauth2/token`,
+        {
+          method: 'POST',
+          headers: {
+            ['Content-Type']: 'application/x-www-form-urlencoded'
+          },
+          body: oauthTokenBody
+        })
+      }
+
+      function onApiInvokeFormSubmit (event) {
+        event.preventDefault()
+        const authType = document.getElementById('authTypeField').value
+        console.log(`authType ${authType}`);
+        const method = 'GET'
+        const endpoint = 'users'
+        const body = undefined
+        let authToken = undefined
+        if (authType == 'RIGHT_COGNITO_TOKEN'){
+          authToken = cognitoIdentityToken
+        }
+        if (authType == 'WRONG_COGNITO_TOKEN'){
+            authToken = 'eyJraWQiOiJIeGJtRktKQkl3TlltVUdReVltTHBLNUpkak9WbTM4VUdFajNjbWJjQkVNPSIsImFsZyI6IlJTMjU2In0.eyJhdF9oYXNoIjoiQ1NOUTFOS2piWkJ2cXhaRC1CYVRyZyIsInN1YiI6Ijg5OTRmZWUyLTExYWQtNDkyOC1iMWY1LWYxMzYxNDAwYjE2MiIsImF1ZCI6IjZ0OHFmNXBibHNpMWE5bWl0cmI1NTRoM21zIiwiZW1haWxfdmVyaWZpZWQiOmZhbHNlLCJ0b2tlbl91c2UiOiJpZCIsImF1dGhfdGltZSI6MTU4NjQzNzM2NSwiaXNzIjoiaHR0cHM6XC9cL2NvZ25pdG8taWRwLmV1LXdlc3QtMS5hbWF6b25hd3MuY29tXC9ldS13ZXN0LTFfb1lGSHBMWVZQIiwiY29nbml0bzp1c2VybmFtZSI6Ijg5OTRmZWUyLTExYWQtNDkyOC1iMWY1LWYxMzYxNDAwYjE2MiIsImV4cCI6MTU4NjQ0MDk2NSwiaWF0IjoxNTg2NDM3MzY1LCJlbWFpbCI6ImZsb3JpYW5jaGF6YWxAZ21haWwuY29tIn0.b0h7WVi0obtKxqtIx3Odxqmw9uL_0y54AD7xt63aIJixfqykuxzgAiNtsUrJDu4qMnXFGa0_h_I-2Vyojb0fIJdCLOMZ6bUaJiXn9WJjbvsqT0YCUwqHh1-ZSAdPfQnbdTedqOEU2imypXficFVFkpa2BKWgkgq8Ni111elcQCxH2tpt__JWP5aXmfhzDP0xI3X3I8meiCt7vV-JogCcc5vhxQuO_V-y3Nu_rGuPZg65f1se5WfWKFnYQDmOPrqBLT8vn-5Gqe_KDy1Cx1_yw0Oj4uK45wS2VbqEm3P-vUHpuLGTkDcnR47TjVivPPD3PqniU1p8eGXSnRj9GkYWyG'
+        }
+        if (authType == 'RIGHT_API_KEY'){
+          authToken = 'a_valid_key'
+        }
+        if (authType == 'WRONG_API_KEY'){
+          authToken = 'wrong_api_key'
+        }
+
+        const headers = {
+            'content-type': 'application/json',
+            'Authorization': authToken
+          }
+        
+        document.querySelector('.request__method').innerText = method
+        document.querySelector('.request__endpoint').innerText = `/${endpoint}`
+        
+        return fetch(endpoint, {
+          method,
+          headers,
+          body
+        })
+        .then(setResponseText)
+        .catch(setResponseText)
+      }
+
+      function setResponseText(response) {
+        const contentType = response.headers.get('content-type')
+        if (contentType.includes('application/json')) {
+          return response.json().then(json => {
+            document.querySelector('code').innerText = JSON.stringify(json, null, 4)
+          })
+        }
+
+        return response.text().then(text => {
+          document.querySelector('code').innerText = text
+        })
+      }

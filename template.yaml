@@ -1,0 +1,103 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: API Gateway with Lambda Request Authorizer
+Resources:
+  MyApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: Prod
+      Auth:
+        DefaultAuthorizer: MyLambdaRequestAuthorizer
+        Authorizers:
+          MyLambdaRequestAuthorizer:
+            FunctionPayloadType: REQUEST
+            FunctionArn: !GetAtt MyAuthFunction.Arn
+            # FunctionInvokeRole: !Ref MyRole
+            Identity:
+              Headers:
+                - Authorization
+              ReauthorizeEvery: 0 # seconds
+
+  MyFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./front
+      Handler: lambda.handler
+      MemorySize: 1024
+      Runtime: nodejs12.x
+      Environment:
+        Variables:
+          COGNITO_USER_POOL_CLIENT_ID: !Ref MyCognitoUserPoolClient
+      Events:
+        Root:
+          Type: Api
+          Properties:
+            RestApiId: !Ref MyApi
+            Path: /
+            Method: GET
+            # NOTE: This endpoint is publicly accessible
+            Auth:
+              Authorizer: NONE
+        ProxyAny:
+          Type: Api
+          Properties:
+            RestApiId: !Ref MyApi
+            Path: /{proxy+}
+            Method: ANY
+            # NOTE: This endpoint is publicly accessible
+            Auth:
+              Authorizer: NONE
+        GetUsers:
+          Type: Api
+          Properties:
+            RestApiId: !Ref MyApi
+            Path: /users
+            Method: GET
+            # NOTE: This endpoint is publicly accessible
+            Auth:
+              Authorizer: MyLambdaRequestAuthorizer
+
+  MyAuthFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./src
+      Handler: handler.lambda_handler
+      Runtime: python3.8
+
+  MyCognitoUserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: 'sam-lambda-request-auth'
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 8
+      UsernameAttributes:
+        - email
+      Schema:
+        - AttributeDataType: String
+          Name: email
+          Required: false
+  
+  MyCognitoUserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      UserPoolId: !Ref MyCognitoUserPool
+      ClientName: 'sam-lambda-request-auth-client'
+      GenerateSecret: false
+
+Outputs:
+  ApiUrl:
+    Description: "API URL"
+    Value: !Sub 'https://${MyApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/'
+
+  ApiId:
+    Description: "API ID"
+    Value: !Ref MyApi
+
+  CognitoUserPoolId:
+    Description: "Cognito User Pool Id"
+    Value: !Ref MyCognitoUserPool
+
+  CognitoUserPoolClientId:
+    Description: "Cognito User Pool Client Id"
+    Value: !Ref MyCognitoUserPoolClient
